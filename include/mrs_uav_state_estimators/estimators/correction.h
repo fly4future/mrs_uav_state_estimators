@@ -256,6 +256,7 @@ private:
 
   bool             isTimestampOk();
   bool             isMsgComing();
+  bool             isStampValid(const builtin_interfaces::msg::Time &stamp);
   std::atomic_bool first_timestamp_ = true;
   rclcpp::Time     msg_time_;
   rclcpp::Time     prev_msg_time_;
@@ -601,7 +602,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_odom_.getMsg();
+    auto msg = sh_odom_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* if (!isTimestampOk(measurement_stamped.stamp)) { */
     /*   return {}; */
@@ -626,7 +630,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_pose_s_.getMsg();
+    auto msg = sh_pose_s_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* if (!isTimestampOk(measurement_stamped.stamp)) { */
     /*   return {}; */
@@ -664,7 +671,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_range_.getMsg();
+    auto msg = sh_range_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* checkMsgDelay(measurement_stamped.stamp); */
 
@@ -689,7 +699,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_imu_.getMsg();
+    auto msg = sh_imu_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* checkMsgDelay(measurement_stamped.stamp); */
 
@@ -718,7 +731,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_rtk_.getMsg();
+    auto msg = sh_rtk_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* checkMsgDelay(measurement_stamped.stamp); */
 
@@ -747,7 +763,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_navsatfix_.getMsg();
+    auto msg = sh_navsatfix_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* checkMsgDelay(measurement_stamped.stamp); */
 
@@ -774,7 +793,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_mag_hdg_.getMsg();
+    auto msg = sh_mag_hdg_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* checkMsgDelay(measurement_stamped.stamp); */
 
@@ -796,7 +818,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_mag_field_.getMsg();
+    auto msg = sh_mag_field_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* checkMsgDelay(measurement_stamped.stamp); */
 
@@ -818,7 +843,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_point_.getMsg();
+    auto msg = sh_point_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* checkMsgDelay(measurement_stamped.stamp); */
 
@@ -840,7 +868,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_vector_.getMsg();
+    auto msg = sh_vector_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* checkMsgDelay(measurement_stamped.stamp); */
 
@@ -862,7 +893,10 @@ std::optional<typename Correction<n_measurements>::MeasurementStamped> Correctio
       return {};
     }
 
-    auto msg                  = sh_quat_.getMsg();
+    auto msg = sh_quat_.getMsg();
+    if (!isStampValid(msg->header.stamp)) {
+      return {};
+    }
     measurement_stamped.stamp = msg->header.stamp;
     /* checkMsgDelay(measurement_stamped.stamp); */
 
@@ -929,6 +963,10 @@ template <int n_measurements>
 void Correction<n_measurements>::callbackOdometry(const nav_msgs::msg::Odometry::ConstSharedPtr msg) {
 
   if (!is_initialized_) {
+    return;
+  }
+
+  if (!isStampValid(msg->header.stamp)) {
     return;
   }
 
@@ -1228,6 +1266,10 @@ void Correction<n_measurements>::callbackPoseStamped(const geometry_msgs::msg::P
     return;
   }
 
+  if (!isStampValid(msg->header.stamp)) {
+    return;
+  }
+
   auto res = getCorrectionFromPoseStamped(msg);
   if (res) {
     applyCorrection(res.value(), msg->header.stamp);
@@ -1353,6 +1395,10 @@ void Correction<n_measurements>::callbackRange(const sensor_msgs::msg::Range::Co
     return;
   }
 
+  if (!isStampValid(msg->header.stamp)) {
+    return;
+  }
+
   auto res = getCorrectionFromRange(msg);
   if (res) {
     applyCorrection(res.value(), msg->header.stamp);
@@ -1410,6 +1456,10 @@ template <int n_measurements>
 void Correction<n_measurements>::callbackImu(const sensor_msgs::msg::Imu::ConstSharedPtr msg) {
 
   if (!is_initialized_) {
+    return;
+  }
+
+  if (!isStampValid(msg->header.stamp)) {
     return;
   }
 
@@ -1574,6 +1624,10 @@ void Correction<n_measurements>::callbackRtk(const mrs_msgs::msg::RtkGps::ConstS
     return;
   }
 
+  if (!isStampValid(msg->header.stamp)) {
+    return;
+  }
+
   auto res = getCorrectionFromRtk(msg);
   if (res) {
     applyCorrection(res.value(), msg->header.stamp);
@@ -1715,6 +1769,10 @@ void Correction<n_measurements>::callbackNavSatFix(const sensor_msgs::msg::NavSa
     return;
   }
 
+  if (!isStampValid(msg->header.stamp)) {
+    return;
+  }
+
   auto res = getCorrectionFromNavSatFix(msg);
   if (res) {
     applyCorrection(res.value(), msg->header.stamp);
@@ -1847,6 +1905,10 @@ void Correction<n_measurements>::callbackMagHeading(const mrs_msgs::msg::Float64
     return;
   }
 
+  if (!isStampValid(msg->header.stamp)) {
+    return;
+  }
+
   auto res = getCorrectionFromMagHeading(msg);
   if (res) {
     applyCorrection(res.value(), msg->header.stamp);
@@ -1918,6 +1980,10 @@ template <int n_measurements>
 void Correction<n_measurements>::callbackMagField(const sensor_msgs::msg::MagneticField::ConstSharedPtr msg) {
 
   if (!is_initialized_) {
+    return;
+  }
+
+  if (!isStampValid(msg->header.stamp)) {
     return;
   }
 
@@ -2040,6 +2106,10 @@ void Correction<n_measurements>::callbackPoint(const geometry_msgs::msg::PointSt
     return;
   }
 
+  if (!isStampValid(msg->header.stamp)) {
+    return;
+  }
+
   auto res = getCorrectionFromPoint(msg);
   if (res) {
     applyCorrection(res.value(), msg->header.stamp);
@@ -2143,6 +2213,10 @@ template <int n_measurements>
 void Correction<n_measurements>::callbackVector(const geometry_msgs::msg::Vector3Stamped::ConstSharedPtr msg) {
 
   if (!is_initialized_) {
+    return;
+  }
+
+  if (!isStampValid(msg->header.stamp)) {
     return;
   }
 
@@ -2568,6 +2642,21 @@ void Correction<n_measurements>::checkMsgDelay(const rclcpp::Time &msg_time) {
     is_delay_ok_ = true;
   }
   publishDelay(delay);
+}
+/*//}*/
+
+/*//{ isStampValid() */
+template <int n_measurements>
+bool Correction<n_measurements>::isStampValid(const builtin_interfaces::msg::Time &stamp) {
+
+  // rclcpp::Time throws on a negative stamp, which would take down the whole container
+  if (stamp.sec < 0) {
+    RCLCPP_ERROR_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: dropping message with negative timestamp %d.%09u", getPrintName().c_str(), stamp.sec,
+                          stamp.nanosec);
+    return false;
+  }
+
+  return true;
 }
 /*//}*/
 
