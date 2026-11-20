@@ -40,6 +40,7 @@ set(DEPENDENCIES
   nav_msgs
   std_msgs
   sensor_msgs
+  mavros_msgs
   mrs_uav_managers
   tf2_geometry_msgs
   Eigen3
@@ -189,6 +190,7 @@ add_library(MrsUavStateEstimators_F9P SHARED
 target_link_libraries(MrsUavStateEstimators_F9P
   PUBLIC
     mrs_uav_state_estimators::common
+    ${mavros_msgs_TARGETS}
 )
 
 target_compile_definitions(MrsUavStateEstimators_F9P PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})

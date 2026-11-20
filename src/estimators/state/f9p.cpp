@@ -64,6 +64,20 @@ void F9P::initialize(const rclcpp::Node::SharedPtr &node, const std::shared_ptr<
   ph_->param_loader->loadParam("gnss/topic", gnss_topic_);
   gnss_topic_ = "/" + ch_->uav_name + "/" + gnss_topic_;
 
+  std::string alt_ref_source, rtk_baseline_topic, tripod_height_topic;
+  ph_->param_loader->loadParam("altitude_reference/source", alt_ref_source);
+  ph_->param_loader->loadParam("altitude_reference/rtk_baseline_topic", rtk_baseline_topic);
+  ph_->param_loader->loadParam("altitude_reference/tripod_height_topic", tripod_height_topic);
+  ph_->param_loader->loadParam("altitude_reference/max_vertical_accuracy", max_vertical_accuracy_);
+
+  if (alt_ref_source != "start" && alt_ref_source != "rtk_base") {
+    RCLCPP_ERROR(node_->get_logger(), "[%s]: altitude_reference/source must be \"start\" or \"rtk_base\", got \"%s\"", getPrintName().c_str(),
+                 alt_ref_source.c_str());
+    error_publisher_->addOneshotError("invalid altitude_reference/source");
+    error_publisher_->flushAndShutdown();
+  }
+  use_rtk_base_ = alt_ref_source == "rtk_base";
+
   // | --------------- subscribers initialization --------------- |
 
   mrs_lib::SubscriberHandlerOptions shopts;
@@ -78,6 +92,17 @@ void F9P::initialize(const rclcpp::Node::SharedPtr &node, const std::shared_ptr<
   sh_f9p_odom_ = mrs_lib::SubscriberHandler<nav_msgs::msg::Odometry>(shopts, msg_topic_, &F9P::callbackF9POdom, this);
 
   sh_gnss_ = mrs_lib::SubscriberHandler<sensor_msgs::msg::NavSatFix>(shopts, gnss_topic_, &F9P::callbackGnss, this);
+
+  if (use_rtk_base_) {
+    // best effort is compatible with both reliable and best-effort publishers (mavros)
+    mrs_lib::SubscriberHandlerOptions shopts_rtk = shopts;
+    shopts_rtk.qos                               = rclcpp::SensorDataQoS();
+    sh_rtk_baseline_ = mrs_lib::SubscriberHandler<mavros_msgs::msg::RTKBaseline>(shopts_rtk, "/" + ch_->uav_name + "/" + rtk_baseline_topic);
+
+    mrs_lib::SubscriberHandlerOptions shopts_tripod = shopts;
+    shopts_tripod.qos                               = rclcpp::QoS(1).reliable().transient_local();
+    sh_tripod_height_ = mrs_lib::SubscriberHandler<std_msgs::msg::Float64>(shopts_tripod, tripod_height_topic);
+  }
 
   // | ------------------------- timers ------------------------- |
 
@@ -240,6 +265,10 @@ void F9P::timerCheckF9POdomHz() {
       }
     }
 
+    if (use_rtk_base_ && !getHeightAboveBaseGround(true)) {
+      return;
+    }
+
     changeState(READY_STATE);
     RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: Estimator is ready to start", getPrintName().c_str());
     timer_check_f9p_odom_hz_->stop();
@@ -298,11 +327,27 @@ void F9P::updateUavState() {
 
   if (first_iter_) {
 
+    // updateUavState() can run before READY, so the capture waits for a good baseline
+    std::optional<BaseGroundHeight> base_ground;
+    if (use_rtk_base_) {
+      base_ground = getHeightAboveBaseGround(false);
+      if (!base_ground) {
+        return;
+      }
+    }
+
     gnss_x_ = (gnss_x_ - msg->pose.pose.position.x) - ch_->world_origin.x;
     gnss_y_ = (gnss_y_ - msg->pose.pose.position.y) - ch_->world_origin.y;
     /* gnss_z_                    = gnss_z_ - msg->pose.pose.position.z; */ // absolute AMSL altitude
-    gnss_z_ = -msg->pose.pose.position.z;                                   // relative altitude to start
-                                                                            //
+
+    if (use_rtk_base_) {
+      gnss_z_ = base_ground->height - msg->pose.pose.position.z;
+      RCLCPP_INFO(node_->get_logger(), "[%s]: altitude referenced to RTK base ground: height %.3f m, tripod %.3f m, offset %.3f m",
+                  getPrintName().c_str(), base_ground->height, base_ground->tripod_height, gnss_z_);
+    } else {
+      gnss_z_ = -msg->pose.pose.position.z;  // relative altitude to start
+    }
+
     prev_msg_   = msg;
     first_iter_ = false;
   }
@@ -409,6 +454,44 @@ void F9P::callbackGnss(const sensor_msgs::msg::NavSatFix::ConstSharedPtr msg) {
   gnss_z_ = msg->altitude;
   RCLCPP_INFO(node_->get_logger(), "[%s]: First GNSS obtained: %.2f %.2f %.2f", getPrintName().c_str(), gnss_x_, gnss_y_, gnss_z_);
   got_gnss_ = true;
+}
+/*//}*/
+
+/*//{ getHeightAboveBaseGround() */
+std::optional<F9P::BaseGroundHeight> F9P::getHeightAboveBaseGround(const bool verbose) {
+
+  auto wait = [&](const std::string &what) -> std::optional<BaseGroundHeight> {
+    if (verbose) {
+      RCLCPP_INFO_THROTTLE(node_->get_logger(), *clock_, 1000, "[%s]: %s %s", getPrintName().c_str(), Support::waiting_for_string.c_str(), what.c_str());
+      error_publisher_->addWaitingForTopicError(what);
+    }
+    return std::nullopt;
+  };
+
+  if (!sh_tripod_height_.hasMsg()) {
+    return wait(sh_tripod_height_.topicName());
+  }
+
+  const double tripod_height = sh_tripod_height_.getMsg()->data;
+  if (!std::isfinite(tripod_height) || tripod_height <= 0.0 || tripod_height >= 5.0) {
+    return wait("valid tripod height (got " + std::to_string(tripod_height) + " m, expected 0-5 m)");
+  }
+
+  if (!sh_rtk_baseline_.hasMsg()) {
+    return wait(sh_rtk_baseline_.topicName());
+  }
+
+  const auto bl = sh_rtk_baseline_.getMsg();
+  if (bl->rtk_health != 1 || bl->baseline_coords_type != mavros_msgs::msg::RTKBaseline::RTK_BASELINE_COORDINATE_SYSTEM_NED) {
+    return wait("RTK fixed NED baseline");
+  }
+
+  if (bl->accuracy / 1000.0 > max_vertical_accuracy_) {
+    return wait("RTK baseline accuracy <= " + std::to_string(max_vertical_accuracy_) + " m (got " + std::to_string(bl->accuracy / 1000.0) + " m)");
+  }
+
+  // NED: down is positive below the base antenna
+  return BaseGroundHeight{tripod_height - bl->baseline_c_mm / 1000.0, tripod_height};
 }
 /*//}*/
 

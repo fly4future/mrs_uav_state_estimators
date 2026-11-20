@@ -10,3 +10,9 @@ mrs_uav_managers:
 
       gnss:
         topic: "hw_api/gnss"
+
+      altitude_reference:
+        source: "start" # "start" (0 at own takeoff spot) | "rtk_base" (height above the ground under the RTK base)
+        rtk_baseline_topic: "mavros/gps_rtk/rtk_baseline" # mavros_msgs/RTKBaseline, relative to /<uav_name>/
+        tripod_height_topic: "/rtk_base/tripod_height" # std_msgs/Float64 [m], latched, shared by all drones
+        max_vertical_accuracy: 0.05 # [m] baselines with worse vertical accuracy are rejected

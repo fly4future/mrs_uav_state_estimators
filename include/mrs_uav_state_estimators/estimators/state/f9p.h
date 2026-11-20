@@ -7,6 +7,8 @@
 
 #include <nav_msgs/msg/odometry.hpp>
 #include <sensor_msgs/msg/nav_sat_fix.hpp>
+#include <std_msgs/msg/float64.hpp>
+#include <mavros_msgs/msg/rtk_baseline.hpp>
 
 #include <mrs_lib/lkf.h>
 #include <mrs_lib/profiler.h>
@@ -84,6 +86,17 @@ private:
   double                                                  gnss_x_, gnss_y_, gnss_z_;
   bool                                                    got_gnss_ = false;
   std::string                                             gnss_topic_;
+
+  bool                                                    use_rtk_base_ = false;
+  double                                                  max_vertical_accuracy_;
+  mrs_lib::SubscriberHandler<mavros_msgs::msg::RTKBaseline> sh_rtk_baseline_;
+  mrs_lib::SubscriberHandler<std_msgs::msg::Float64>        sh_tripod_height_;
+  struct BaseGroundHeight
+  {
+    double height;         // [m] GNSS antenna above the ground under the RTK base
+    double tripod_height;  // [m] the tripod height it was computed with
+  };
+  std::optional<BaseGroundHeight> getHeightAboveBaseGround(const bool verbose);
 
   std::shared_ptr<TimerType> timer_check_f9p_odom_hz_;
   void                       timerCheckF9POdomHz();
