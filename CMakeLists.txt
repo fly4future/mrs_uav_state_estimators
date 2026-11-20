@@ -53,6 +53,7 @@ endforeach()
 set(LIBRARIES
   MrsUavStateEstimators_Common
   MrsUavStateEstimators_GpsBaro
+  MrsUavStateEstimators_GpsBaroOffset
   MrsUavStateEstimators_GpsGarmin
   MrsUavStateEstimators_GarminAgl
   MrsUavStateEstimators_Passthrough
@@ -140,6 +141,19 @@ target_link_libraries(MrsUavStateEstimators_GpsBaro
 )
 
 target_compile_definitions(MrsUavStateEstimators_GpsBaro PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
+
+# GPS Baro Offset
+
+add_library(MrsUavStateEstimators_GpsBaroOffset SHARED
+  src/estimators/state/gps_baro_offset.cpp
+)
+
+target_link_libraries(MrsUavStateEstimators_GpsBaroOffset
+  PUBLIC
+    mrs_uav_state_estimators::common
+)
+
+target_compile_definitions(MrsUavStateEstimators_GpsBaroOffset PRIVATE USE_ROS_TIMER=${USE_ROS_TIMER})
 
 # GPS Garmin
 

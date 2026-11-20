@@ -11,6 +11,12 @@
     </class>
   </library>
 
+  <library path="MrsUavStateEstimators_GpsBaroOffset">
+    <class type="mrs_uav_state_estimators::gps_baro_offset::GpsBaroOffset" base_class_type="mrs_uav_managers::StateEstimator">
+      <description>GpsBaroOffset state estimator</description>
+    </class>
+  </library>
+
   <library path="MrsUavStateEstimators_Rtk">
     <class type="mrs_uav_state_estimators::rtk::Rtk" base_class_type="mrs_uav_managers::StateEstimator">
       <description>Rtk state estimator</description>
